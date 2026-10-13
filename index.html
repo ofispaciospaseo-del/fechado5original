@@ -107,7 +107,7 @@
       object-fit: contain;
     }
 
-    /* Sello Cuadrado Rojo Inclinado (Auténtico estilo de validación) */
+    /* Sello Cuadrado Rojo Inclinado en la interfaz web */
     .stamp-square {
       position: absolute;
       top: 15px;
@@ -200,12 +200,11 @@
     <input type="file" id="imgInput" accept="image/*" onchange="processImage(this.files[0])">
   </div>
 
-  <!-- Acta / Comprobante con el Sello Superior -->
+  <!-- Acta / Comprobante con el Sello y la Data -->
   <div class="certificate-card" id="certificate">
     <h3>Acta de Estampa Temporal y Verificación</h3>
     
     <div class="preview-container">
-      <!-- Sello rojo superior derecho sobre la imagen -->
       <div class="stamp-square">
         <div class="stamp-title">FECHADO DIGITAL</div>
         <div class="stamp-status">VERIFICADO</div>
@@ -222,21 +221,21 @@
       <p><strong>Geolocalización:</strong> <span id="recGeo">Obteniendo coordenadas...</span></p>
     </div>
 
-    <!-- Botón de descarga directa en JPG -->
-    <button class="btn" onclick="downloadStampedJPG()">📥 Descargar Imagen Sellada (JPG)</button>
+    <!-- Botón de descarga con todo integrado -->
+    <button class="btn" onclick="downloadStampedJPG()">📥 Descargar Certificado Completo (JPG)</button>
   </div>
 </div>
 
-<!-- Canvas oculto para armar la imagen final con el sello -->
+<!-- Canvas oculto para armar la imagen integrada -->
 <canvas id="exportCanvas" style="display:none;"></canvas>
 
 <script>
   let currentFile = null;
   let formattedTimeCache = "";
   let currentHashHex = "";
+  let geoTextCache = "No disponible";
   let loadedImageObj = new Image();
 
-  // Reloj oficial de Buenos Aires al milisegundo
   function getBuenosAiresTime(dateObj = new Date()) {
     const options = {
       timeZone: 'America/Argentina/Buenos_Aires',
@@ -271,7 +270,7 @@
     formattedTimeCache = getBuenosAiresTime();
     const timeOnly = formattedTimeCache.split(' ')[1] || formattedTimeCache;
 
-    // Cálculo del Hash SHA-256 para verificación matemática inalterable
+    // Hash SHA-256
     const arrayBuffer = await file.arrayBuffer();
     const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -299,26 +298,29 @@
     };
     reader.readAsDataURL(file);
 
-    // Geolocalización precisa
+    // Geolocalización
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const lat = position.coords.latitude.toFixed(6);
           const lon = position.coords.longitude.toFixed(6);
           const acc = position.coords.accuracy.toFixed(1);
-          document.getElementById('recGeo').textContent = `Lat: ${lat}, Lon: ${lon} (Precisión: ±${acc}m)`;
+          geoTextCache = `Lat: ${lat}, Lon: ${lon} (±${acc}m)`;
+          document.getElementById('recGeo').textContent = geoTextCache;
         },
         (error) => {
-          document.getElementById('recGeo').textContent = `No disponible (${error.message})`;
+          geoTextCache = "No disponible";
+          document.getElementById('recGeo').textContent = geoTextCache;
         },
         { enableHighAccuracy: true }
       );
     } else {
-      document.getElementById('recGeo').textContent = "No soportada.";
+      geoTextCache = "No soportada";
+      document.getElementById('recGeo').textContent = geoTextCache;
     }
   }
 
-  // Generación y descarga directa en JPG con el sello rojo integrado
+  // Generación y descarga de la imagen integrando el sello arriba Y el acta con datos abajo
   function downloadStampedJPG() {
     if (!loadedImageObj.complete || loadedImageObj.naturalWidth === 0) {
       alert("La imagen aún se está procesando. Aguardá un momento.");
@@ -331,14 +333,21 @@
     const origW = loadedImageObj.naturalWidth;
     const origH = loadedImageObj.naturalHeight;
 
-    canvas.width = origW;
-    canvas.height = origH;
+    // Franja inferior proporcional para alojar toda el acta de datos técnicos
+    const footerHeight = Math.max(260, Math.round(origH * 0.22));
 
-    // 1. Dibujar imagen original al 100%
+    canvas.width = origW;
+    canvas.height = origH + footerHeight;
+
+    // 1. Fondo blanco general para el acta integrada
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 2. Dibujar la imagen original al 100% arriba
     ctx.drawImage(loadedImageObj, 0, 0, origW, origH);
 
-    // 2. Renderizar el sello rojo cuadrado arriba a la derecha sobre la imagen
-    const stampW = Math.max(150, Math.round(origW * 0.22));
+    // 3. Renderizar el Sello Rojo Cuadrado Arriba a la Derecha sobre la foto
+    const stampW = Math.max(160, Math.round(origW * 0.22));
     const stampH = stampW;
     const stampX = origW - stampW - Math.round(origW * 0.03);
     const stampY = Math.round(origH * 0.03);
@@ -347,16 +356,13 @@
     ctx.translate(stampX + stampW / 2, stampY + stampH / 2);
     ctx.rotate(-12 * Math.PI / 180);
 
-    // Fondo translúcido del sello
-    ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.94)";
     ctx.fillRect(-stampW / 2, -stampH / 2, stampW, stampH);
 
-    // Borde rojo
     ctx.strokeStyle = "#dc2626";
     ctx.lineWidth = Math.max(4, Math.round(origW * 0.005));
     ctx.strokeRect(-stampW / 2, -stampH / 2, stampW, stampH);
 
-    // Textos del sello
     const timeOnly = formattedTimeCache.split(' ')[1] || formattedTimeCache;
     const fSizeTitle = Math.max(12, Math.round(stampW * 0.11));
     const fSizeStatus = Math.max(10, Math.round(stampW * 0.09));
@@ -383,9 +389,45 @@
 
     ctx.restore();
 
-    // 3. Descarga directa en JPG
+    // 4. Franja de Datos Técnicos Integrada al Pie (Acta Digital)
+    const footerTop = origH;
+    ctx.fillStyle = "#1e293b";
+    ctx.fillRect(0, footerTop, origW, footerHeight);
+
+    // Línea divisoria superior del pie
+    ctx.strokeStyle = "#0284c7";
+    ctx.lineWidth = Math.max(4, Math.round(origW * 0.005));
+    ctx.beginPath();
+    ctx.moveTo(0, footerTop);
+    ctx.lineTo(origW, footerTop);
+    ctx.stroke();
+
+    // Textos del Acta abajo
+    const fontTitleFooter = Math.max(14, Math.round(origW * 0.022));
+    const fontDataFooter = Math.max(11, Math.round(origW * 0.017));
+    const padLeft = Math.round(origW * 0.03);
+
+    ctx.textAlign = "left";
+    ctx.font = "bold " + fontTitleFooter + "px 'Segoe UI', sans-serif";
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillText("ACTA DE ESTAMPA TEMPORAL Y VERIFICACIÓN DIGITAL", padLeft, footerTop + (footerHeight * 0.22));
+
+    ctx.font = fontDataFooter + "px monospace";
+    
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillText("• FECHA Y HORA (BS.AS.): " + formattedTimeCache, padLeft, footerTop + (footerHeight * 0.42));
+    
+    // Partir el Hash en dos líneas si es muy largo para que no se corte
+    const hashLine1 = "• HASH-ID (SHA-256): " + currentHashHex.substring(0, 36);
+    const hashLine2 = "  " + currentHashHex.substring(36);
+    ctx.fillText(hashLine1, padLeft, footerTop + (footerHeight * 0.58));
+    ctx.fillText(hashLine2, padLeft, footerTop + (footerHeight * 0.72));
+
+    ctx.fillText("• ARCHIVO: " + (currentFile ? currentFile.name : "doc") + "  |  GEOLOCALIZACIÓN: " + geoTextCache, padLeft, footerTop + (footerHeight * 0.88));
+
+    // 5. Descargar la imagen JPG completa con el sello y el acta integrados
     const link = document.createElement('a');
-    link.download = 'Fechado_Oficial_' + Date.now() + '.jpg';
+    link.download = 'Certificado_FeCierta_' + Date.now() + '.jpg';
     link.href = canvas.toDataURL('image/jpeg', 0.95);
     document.body.appendChild(link);
     link.click();
