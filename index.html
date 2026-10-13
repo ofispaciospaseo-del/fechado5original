@@ -31,6 +31,7 @@
       padding: 24px;
       border-radius: 12px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      box-sizing: border-box;
     }
 
     h1 {
@@ -95,6 +96,7 @@
       margin: 0 auto 20px auto;
       border-radius: 4px;
       border: 1px solid #cbd5e1;
+      object-fit: contain;
     }
 
     .data-list {
@@ -108,59 +110,18 @@
       color: #0f172a;
     }
 
-    /* Sello Cuadrado "Fechado Digital" */
-    .stamp-square {
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      width: 130px;
-      height: 130px;
-      border: 4px solid var(--stamp-color);
-      color: var(--stamp-color);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      text-align: center;
-      font-weight: bold;
-      text-transform: uppercase;
-      transform: rotate(-12deg);
-      opacity: 0.85;
-      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
-      user-select: none;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 6px;
-      box-sizing: border-box;
-    }
-
-    .stamp-title {
-      font-size: 0.8rem;
-      border-bottom: 2px solid var(--stamp-color);
-      padding-bottom: 2px;
-      margin-bottom: 4px;
-      letter-spacing: 1px;
-    }
-
-    .stamp-status {
-      font-size: 0.65rem;
-      margin-top: 4px;
-    }
-
-    .stamp-time {
-      font-size: 0.6rem;
-      font-family: monospace;
-      word-break: break-all;
-    }
-
     .btn {
       background: var(--accent-color);
       color: white;
       border: none;
-      padding: 10px 20px;
+      padding: 12px 20px;
       border-radius: 6px;
       cursor: pointer;
       font-weight: bold;
-      margin-top: 10px;
+      margin-top: 15px;
+      width: 100%;
+      font-size: 1rem;
+      text-align: center;
     }
 
     .btn:hover {
@@ -173,9 +134,9 @@
 <div class="container">
   <h1>Fechador Digital de Fe Cierta</h1>
 
-  <!-- Línea de tiempo / Reloj continuo -->
+  <!-- Línea de tiempo / Reloj continuo Bs.As. -->
   <div class="timeline-bar">
-    <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">LÍNEA DE TIEMPO EN VIVO (UTC)</div>
+    <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">LÍNEA DE TIEMPO EN VIVO (HORA BUENOS AIRES - ARGENTINA)</div>
     <div class="clock-live" id="liveClock">0000-00-00 00:00:00.000</div>
   </div>
 
@@ -185,35 +146,56 @@
     <input type="file" id="imgInput" accept="image/*" onchange="processImage(this.files[0])">
   </div>
 
-  <!-- Acta / Comprobante con el Sello -->
+  <!-- Acta / Comprobante -->
   <div class="certificate-card" id="certificate">
-    <!-- Sello Cuadrado Fechado Digital -->
-    <div class="stamp-square">
-      <div class="stamp-title">FECHADO DIGITAL</div>
-      <div class="stamp-status">VERIFICADO</div>
-      <div class="stamp-time" id="stampTimeCode">00:00:00.000</div>
-    </div>
-
     <h3>Acta de Estampa Temporal</h3>
     <img id="imgPreview" class="preview-img" alt="Vista previa de imagen">
 
     <div class="data-list">
-      <p><strong>Fecha y Hora de Registro (ms):</strong> <span id="recTime">--</span></p>
+      <p><strong>Fecha y Hora de Registro (Bs.As.):</strong> <span id="recTime">--</span></p>
       <p><strong>Peso / Tamaño:</strong> <span id="recSize">--</span></p>
       <p><strong>Nombre del Archivo:</strong> <span id="recName">--</span></p>
       <p><strong>Geolocalización:</strong> <span id="recGeo">Obteniendo coordenadas...</span></p>
     </div>
 
-    <button class="btn" onclick="window.print()">Imprimir / Guardar PDF</button>
+    <!-- Botón de descarga directa JPG sin PDF ni bloqueadores -->
+    <button class="btn" onclick="downloadStampedJPG()">📥 Descargar Imagen con Sello (JPG)</button>
   </div>
 </div>
 
+<!-- Canvas oculto para generar la imagen final sellada -->
+<canvas id="exportCanvas" style="display:none;"></canvas>
+
 <script>
-  // Actualización continua de la línea de tiempo con milisegundos
+  let currentFile = null;
+  let formattedTimeCache = "";
+  let loadedImageObj = new Image();
+
+  // Función para obtener la fecha y hora exacta en Buenos Aires con milisegundos
+  function getBuenosAiresTime(dateObj = new Date()) {
+    const options = {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    };
+    
+    const formatter = new Intl.DateTimeFormat('sv-SE', options); // Formato YYYY-MM-DD HH:mm:ss
+    const parts = formatter.formatToParts(dateObj);
+    const dateMap = {};
+    parts.forEach(p => dateMap[p.type] = p.value);
+
+    const ms = String(dateObj.getMilliseconds()).padStart(3, '0');
+    return `${dateMap.year}-${dateMap.month}-${dateMap.day} ${dateMap.hour}:${dateMap.minute}:${dateMap.second}.${ms}`;
+  }
+
+  // Actualización continua de la línea de tiempo
   function updateLiveClock() {
-    const now = new Date();
-    const isoString = now.toISOString().replace('T', ' ').replace('Z', '');
-    document.getElementById('liveClock').textContent = isoString;
+    document.getElementById('liveClock').textContent = getBuenosAiresTime();
     requestAnimationFrame(updateLiveClock);
   }
   requestAnimationFrame(updateLiveClock);
@@ -221,33 +203,31 @@
   // Procesamiento de la imagen cargada
   function processImage(file) {
     if (!file) return;
+    currentFile = file;
 
-    // 1. Estampa de tiempo exacta al seleccionar el archivo
-    const timestamp = new Date();
-    const formattedTime = timestamp.toISOString().replace('T', ' ').replace('Z', '');
+    formattedTimeCache = getBuenosAiresTime();
 
-    // 2. Peso y datos del archivo
     const sizeInKB = (file.size / 1024).toFixed(2);
     const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
     const sizeStr = file.size > 1048576 ? `${sizeInMB} MB (${file.size} bytes)` : `${sizeInKB} KB (${file.size} bytes)`;
 
-    // Mostrar vista previa
     const reader = new FileReader();
     reader.onload = function(e) {
-      document.getElementById('imgPreview').src = e.target.result;
-      document.getElementById('recTime').textContent = formattedTime;
-      document.getElementById('recSize').textContent = sizeStr;
-      document.getElementById('recName').textContent = file.name;
+      const dataUrl = e.target.result;
+      document.getElementById('imgPreview').src = dataUrl;
       
-      // Actualizar texto dentro del sello cuadrado
-      const timeOnly = formattedTime.split(' ')[1] || formattedTime;
-      document.getElementById('stampTimeCode').textContent = timeOnly;
-
-      document.getElementById('certificate').style.display = 'block';
+      loadedImageObj = new Image();
+      loadedImageObj.onload = function() {
+        document.getElementById('recTime').textContent = formattedTimeCache;
+        document.getElementById('recSize').textContent = sizeStr;
+        document.getElementById('recName').textContent = file.name;
+        document.getElementById('certificate').style.display = 'block';
+      };
+      loadedImageObj.src = dataUrl;
     };
     reader.readAsDataURL(file);
 
-    // 3. Geolocalización
+    // Geolocalización
     if ("geolocation" in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -264,6 +244,70 @@
     } else {
       document.getElementById('recGeo').textContent = "Geolocalización no soportada por el navegador.";
     }
+  }
+
+  // Descarga directa de la imagen con el sello incorporado abajo (Compatible con celulares)
+  function downloadStampedJPG() {
+    if (!loadedImageObj.complete || loadedImageObj.naturalWidth === 0) {
+      alert("La imagen aún se está procesando. Aguardá un momento.");
+      return;
+    }
+
+    const canvas = document.getElementById('exportCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const originalWidth = loadedImageObj.naturalWidth;
+    const originalHeight = loadedImageObj.naturalHeight;
+
+    // Franja proporcional para el sello oficial de fe cierta
+    const stampHeight = Math.max(160, Math.round(originalHeight * 0.13));
+
+    canvas.width = originalWidth;
+    canvas.height = originalHeight + stampHeight;
+
+    // 1. Dibujar la imagen original a su resolución del 100% (sin perder legibilidad)
+    ctx.drawImage(loadedImageObj, 0, 0, originalWidth, originalHeight);
+
+    // 2. Fondo del sello institucional/oficial al pie
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, originalHeight, originalWidth, stampHeight);
+
+    // Línea divisoria roja
+    ctx.strokeStyle = "#dc2626";
+    ctx.lineWidth = Math.max(4, Math.round(originalWidth * 0.006));
+    ctx.beginPath();
+    ctx.moveTo(0, originalHeight);
+    ctx.lineTo(originalWidth, originalHeight);
+    ctx.stroke();
+
+    // 3. Textos y datos del sello
+    const fontSizeMain = Math.max(14, Math.round(originalWidth * 0.022));
+    const fontSizeDetails = Math.max(11, Math.round(originalWidth * 0.018));
+    const padding = Math.max(20, Math.round(originalWidth * 0.025));
+
+    ctx.textAlign = "left";
+    ctx.font = "bold " + fontSizeMain + "px 'Segoe UI', Tahoma, sans-serif";
+
+    // Título del Sello
+    ctx.fillStyle = "#dc2626";
+    ctx.fillText("⚖️ FECHADOR DIGITAL DE FE CIERTA — VERIFICADO", padding, originalHeight + (stampHeight * 0.30));
+
+    // Hora y fecha exacta de Buenos Aires
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "bold " + fontSizeDetails + "px monospace";
+    ctx.fillText("FECHA Y HORA (BS.AS.): " + formattedTimeCache, padding, originalHeight + (stampHeight * 0.60));
+
+    // Archivo y validación
+    ctx.fillStyle = "#475569";
+    ctx.fillText("ARCHIVO: " + (currentFile ? currentFile.name : "documento.jpg"), padding, originalHeight + (stampHeight * 0.85));
+
+    // 4. Disparar descarga JPG directa al dispositivo
+    const link = document.createElement('a');
+    link.download = 'Fechado_BuenosAires_' + Date.now() + '.jpg';
+    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 </script>
 
